@@ -49,12 +49,12 @@ let downloadBooks = require("./download.js").downloadBooks;
   console.log(`total_items: ${total_items}`);
 
 
-
-
   // -----------download the target book----------------
   // console.log(`res: ${JSON.stringify(downloadObjs, null, 2)}`);
 
   // iterate downloadObjs and invoke downloadBooks async
+  let downloadCount = 0;
+
   for (let i = 0; i < allBooks.length; i++) {
     let bookInfoObj = allBooks[i].book;
 
@@ -73,6 +73,10 @@ let downloadBooks = require("./download.js").downloadBooks;
     while (!downloadRes) {
       try {
         downloadRes = await downloadBooks(browser, domain, bookInfoObj);
+
+        if (!downloadRes) {
+          throw new Error("download failed");
+        }
       } catch (e) {
         try {
           mirrorLoginUrl = await getMirrorLoginInfo(browser);
@@ -90,6 +94,9 @@ let downloadBooks = require("./download.js").downloadBooks;
       }
     }
 
+    downloadCount++;
+
+    console.log(`<<<<<<<<<<<<<<< total_items: ${total_items}, downloaded: ${downloadCount} >>>>>>>>>>>>>>>>>`);
 
   }
   await browser.close();

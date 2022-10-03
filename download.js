@@ -3,7 +3,7 @@ const puppeteer = require("puppeteer");
 
 let getMirrorLoginInfo = async function (browser) {
   const page = await browser.newPage();
-  await page.setDefaultNavigationTimeout(20000);
+  await page.setDefaultNavigationTimeout(10000);
   await page.goto("https://v3.zhelper.net/");
 
   // get all a inside div with class "py-4 text-center align-items-center"
@@ -35,6 +35,8 @@ let getMirrorLoginInfo = async function (browser) {
   // get the content of p with class "lead mb-4"
   // close browser
   const page2 = await browser.newPage();
+  await page.setDefaultNavigationTimeout(10000);
+
   await page2.goto(targetSiteObj.href);
   page2.on('console', msg => {
     for (let i = 0; i < msg.args().length; ++i)
@@ -133,6 +135,7 @@ let downloadBooks = async (browser, targetDomain, bookInfoObj) => {
   // bookDetailUrl is concat by targetDomain and bookInfoObj.href
   let bookDetailUrl = new URL(bookInfoObj.href, targetDomain).href;
   const page = await browser.newPage();
+  await page.setDefaultNavigationTimeout(15000);
 
   // goto bookDetailUrl until the page loaded completely
   await page.goto(bookDetailUrl);
@@ -196,6 +199,25 @@ let downloadBooks = async (browser, targetDomain, bookInfoObj) => {
     }
   }
 
+  // sleep 2s
+  // if h1  content "每日限额已用完" find in the page, close the page and return false
+  await new Promise(r => setTimeout(r, 1000));
+  let noChance = await page.evaluate(async () => {
+    let h1s = document.querySelectorAll("h1");
+    for (let i = 0; i < h1s.length; i++) {
+      if (h1s[i].textContent.includes("每日限额已用完")) {
+        return true;
+      }
+    }
+    return false;
+  });
+
+  if (noChance) {
+    await page.screenshot({ path: "afterBookDownload.png" });
+    await page.close();
+    console.log("剩余次数用完了  ...");
+    return false;
+  }
 
   console.log("waiting for request finish ...");
   await page.waitForNetworkIdle({idleTime: 500});
@@ -203,12 +225,29 @@ let downloadBooks = async (browser, targetDomain, bookInfoObj) => {
 
   // wait 1s use promise
   await page.screenshot({ path: "afterBookDownload.png" });
-  await new Promise(r => setTimeout(r, 1000));
+  await new Promise(r => setTimeout(r, 500));
   console.log(`download ${bookInfoObj.title}.${bookInfoObj.extension} completed`);
   console.log(`---------------------------------------------------------------------\r\n`);
 
+  // if span with class "mark" and content is "已下载" find return true
+  let isDownloaded = await page.evaluate(async () => {
+    let spans = document.querySelectorAll("span.mark");
+    for (let i = 0; i < spans.length; i++) {
+      if (spans[i].textContent === "已下载") {
+        return true;
+      }
+    }
+    return false;
+  });
+
+
   await page.close();
-  return true;
+
+  if (isDownloaded) {
+    return true;
+  } else {
+    return false;
+  }
 }
 
 
