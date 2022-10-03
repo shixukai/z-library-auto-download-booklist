@@ -91,20 +91,18 @@ let getMirrorLoginInfo = async function (browser) {
   });
 
   // get the cookies from page2
-  // if the cookies length < 3, wait 1s and get the cookies again
-  // if > 30s, reload the page2
-
   let cookies = await page2.cookies();
   let i = 0;
   let reloadCount = 0;
-  while (cookies.length < 3) {
-    console.log('waiting for 1s ... current cookies length is ', cookies.length);
+  // check cf_use_ob in cookies
+  while (!cookies.find((cookie) => cookie.name === "cf_use_ob")) {
+    console.log('page is not ready, waiting for 1s ...');
     // wait 1s use await new Promise(r => setTimeout(r, 1000));
     await new Promise(r => setTimeout(r, 1000));
     cookies = await page2.cookies();
     i++;
 
-    if (i > 5) {
+    if (i >= 5) {
       if (reloadCount > 1) {
         //raise error
         throw new Error('reload too many times');
@@ -145,7 +143,7 @@ let downloadBooks = async (browser, targetDomain, bookInfoObj) => {
   // take a screenshot
   await page.screenshot({ path: "bookDetail.png" });
 
-  console.log(`bookInfoObj: ${JSON.stringify(bookInfoObj, null, 2)}`);
+  // console.log(`bookInfoObj: ${JSON.stringify(bookInfoObj, null, 2)}`);
 
   // set client with createCDPSession
   // set save the file to ./tmp folder
