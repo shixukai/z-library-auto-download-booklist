@@ -70,8 +70,18 @@ let getDoc = async (browser, targetDomain) => {
   return bookInfoObjsRes;
 }
 
+let getBookListDetails = async(listID, page, targetDomain) => {
+  //papi/booklist/334202/get-books/1
+  let ReqURL = new URL(`/papi/booklist/${listID}/get-books/${page}`, targetDomain);
+  // get the book list from ReqURL
+  let bookListRes = await fetch(ReqURL.href);
+  let bookListJson = await bookListRes.json();
+  return bookListJson;
+}
+
 
 // export { getDoc, parserDoc }
 module.exports = {
   getDoc,
+  getBookListDetails
 };

@@ -3,6 +3,7 @@ const puppeteer = require("puppeteer");
 
 let getMirrorLoginInfo = async function (browser) {
   const page = await browser.newPage();
+  await page.setDefaultNavigationTimeout(20000);
   await page.goto("https://v3.zhelper.net/");
 
   // get all a inside div with class "py-4 text-center align-items-center"
@@ -92,16 +93,26 @@ let getMirrorLoginInfo = async function (browser) {
 
   let cookies = await page2.cookies();
   let i = 0;
+  let reloadCount = 0;
   while (cookies.length < 3) {
-    console.log('waiting for 1s ...');
+    console.log('waiting for 1s ... current cookies length is ', cookies.length);
     // wait 1s use await new Promise(r => setTimeout(r, 1000));
     await new Promise(r => setTimeout(r, 1000));
     cookies = await page2.cookies();
     i++;
-    if (i > 30) {
+
+    if (i > 5) {
+      if (reloadCount > 1) {
+        //raise error
+        throw new Error('reload too many times');
+      }
+
       await page2.reload();
-      console.log('reload page');
+      //take a screenshot
+      await page2.screenshot({ path: "login.png" });
+      console.log(`reload page, reloadCount: ${reloadCount}`);
       i = 0;
+      reloadCount++;
     }
   }
 
@@ -119,52 +130,78 @@ let downloadBooks = async (browser, targetDomain, bookInfoObj) => {
   const page = await browser.newPage();
 
   // goto bookDetailUrl until the page loaded completely
-
   await page.goto(bookDetailUrl);
+
+
+
   // take a screenshot
   await page.screenshot({ path: "bookDetail.png" });
 
-  let downloadHref = await page.evaluate(() => {
-    let href = document
-      .getElementsByClassName("zlibicon-download")[0]
-      .parentElement.getAttribute("href");
-
-    return href;
-  });
-  console.log(`downloadHref: ${downloadHref}`);
-
-  let bookDownloadUrl = new URL(downloadHref, targetDomain).href;
-  bookDownloadUrl += "?dsource=recommend";
-
-
-  console.log(`bookDownloadUrl: ${bookDownloadUrl}`);
   console.log(`bookInfoObj: ${JSON.stringify(bookInfoObj, null, 2)}`);
 
   // set client with createCDPSession
   // set save the file to ./tmp folder
   // wait until download completed
-  // start download
+  // start download and rename the file
   const client = await page.target().createCDPSession();
   await client.send("Page.setDownloadBehavior", {
     behavior: "allow",
-    downloadPath: "./tmp"
+    downloadPath: `./tmp`,
   });
 
-  // click the download button with class "btn btn-primary dlButton addDownloadedBook"
-  // wait until networkidle0
+
+  // wait for lu with class "dropdown-menu" ready
   await page.waitForSelector(".btn.btn-primary.dlButton.addDownloadedBook");
-  await page.click(".btn.btn-primary.dlButton.addDownloadedBook");
+  await page.waitForSelector("ul.dropdown-menu");
+
+  if(bookInfoObj.extension === "epub") {
+    // click the download button with class "btn btn-primary dlButton addDownloadedBook"
+    await page.click(".btn.btn-primary.dlButton.addDownloadedBook");
+  } else {
+    console.log(`default bookInfoObj extension is ${bookInfoObj.extension}, try to find epub`);
+    // li is inside the ul with class "dropdown-menu"
+    // a is inside the li
+    // b is inside the a
+    // find the a which b with content "epub" in the ul with class "dropdown-menu"
+    // return a
+    let epubLink = await page.evaluate(async () => {
+      let lis = document.querySelectorAll("ul.dropdown-menu li");
+      console.log(`lis.length: ${lis.length}`);
+      for (let i = 0; i < lis.length; i++) {
+        let a = lis[i].querySelector("a");
+        if (!a) continue;
+
+        let b = a.querySelector("b");
+        if(!b) continue;
+
+        console.log(`b.textContent: ${b.textContent}`);
+        if (b.textContent === "epub") {
+          return a;
+        }
+      }
+    });
+
+    //if epubLink is not null, click the epubLink
+    if (epubLink) {
+      await epubLink.click();
+      console.log(`find epub version, download it...`);
+    } else {
+      console.log(`not find epub version, download default version...`);
+      await page.click(".btn.btn-primary.dlButton.addDownloadedBook");
+    }
+  }
+
+
+  console.log("waiting for request finish ...");
+  await page.waitForNetworkIdle({idleTime: 500});
+  // page.waitForNavigation({ waitUntil: "networkidle0" });
+
   // wait 1s use promise
-  await new Promise(r => setTimeout(r, 1000));
   await page.screenshot({ path: "afterBookDownload.png" });
-
-  // show all cookies
-  const cookies = await page.cookies();
-  console.log(`cookies: ${JSON.stringify(cookies, null, 2)}`);
-
-  await page.waitForNavigation({
-    waitUntil: "networkidle0"
-  });
+  await new Promise(r => setTimeout(r, 1000));
+  console.log(`download ${bookInfoObj.title}.${bookInfoObj.extension} completed`);
+  console.log(`---------------------------------------------------------------------\r\n`);
+  return true;
 }
 
 

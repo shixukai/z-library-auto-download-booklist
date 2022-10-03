@@ -5,3 +5,5 @@ mirrorLoginUrl.png
 afterBookDownload.png
 example.png
 tmp/
+.DS_Store
+login.png
