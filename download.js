@@ -68,7 +68,8 @@ let getMirrorLoginInfo = async function (browser) {
     mirrorUrl = await page2.evaluate(async () => {
       let content = document.getElementsByClassName("lead mb-4")[0].textContent;
       console.log(`content: ${content}`);
-      let usage = content.match(/0\/10/)?.[0];
+      // match "one number slash 10" like in content
+      let usage = content.match(/\d\/10/)?.[0];
       console.log(`usage: ${usage}`);
       if (usage) {
         let href = document
@@ -120,6 +121,10 @@ let getMirrorLoginInfo = async function (browser) {
 
   console.log(`page2.url(): ${page2.url()}`);
   await page2.screenshot({ path: "mirror.png" });
+
+  //close all pages
+  await page.close();
+  await page2.close();
 
   return mirrorUrl;
 }
@@ -201,6 +206,8 @@ let downloadBooks = async (browser, targetDomain, bookInfoObj) => {
   await new Promise(r => setTimeout(r, 1000));
   console.log(`download ${bookInfoObj.title}.${bookInfoObj.extension} completed`);
   console.log(`---------------------------------------------------------------------\r\n`);
+
+  await page.close();
   return true;
 }
 
