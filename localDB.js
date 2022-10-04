@@ -65,7 +65,7 @@ let closeDB = async() => {
 }
 
 // create bookDetails table if not exist async function
-let createTable = async() => {
+let createBookInfoTable = async() => {
   return new Promise((resolve, reject) => {
     db.run(`CREATE TABLE IF NOT EXISTS BOOK_INFO_OBJ (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -96,7 +96,8 @@ let createTable = async() => {
       dl TEXT,
       preview TEXT,
       _isUserSavedBook INTEGER,
-      downloaded INTEGER DEFAULT 0
+      downloaded INTEGER DEFAULT 0,
+      bookListID INTEGER
       )`, (err) => {
       if (err) {
         console.error(err.message);
@@ -188,7 +189,7 @@ let insertBookInfoObj = async(bookInfoObj) => {
 }
 
 // async function insert batch bookInfoObjs to BOOK_INFO_OBJ
-let insertBookInfoObjs = async(bookInfoObjs) => {
+let insertBookInfoObjs = async(bookInfoObjs, bookListID) => {
   return new Promise((resolve, reject) => {
     let stmt = db.prepare(`INSERT INTO BOOK_INFO_OBJ (
       book_id,
@@ -218,8 +219,10 @@ let insertBookInfoObjs = async(bookInfoObjs) => {
       dl,
       preview,
       _isUserSavedBook,
-      downloaded
+      downloaded,
+      bookListID
       ) VALUES (
+        ?,
         ?,
         ?,
         ?,
@@ -279,6 +282,7 @@ let insertBookInfoObjs = async(bookInfoObjs) => {
         bookInfoObj.preview,
         bookInfoObj._isUserSavedBook,
         bookInfoObj.downloaded,
+        bookListID,
       );
     }
     stmt.finalize((err) => {
@@ -325,14 +329,18 @@ let findAllBookInfoObj = async() => {
 }
 
 // update bookInfoObj field downloaded by book_id async function
-let updateBookInfoObjDownloadedByBookId = async(bookId) => {
+// 0 or NULL: not downloaded
+// 1: downloaded
+// 2: download failed
+// 3: pdf file and overlarge
+let updateBookInfoObjDownloadedByBookId = async(bookId, updateValue = 1) => {
   return new Promise((resolve, reject) => {
-    db.run(`UPDATE BOOK_INFO_OBJ SET downloaded = 1 WHERE book_id = ${bookId}`, (err) => {
+    db.run(`UPDATE BOOK_INFO_OBJ SET downloaded = ${updateValue} WHERE book_id = ${bookId}`, (err) => {
       if (err) {
         console.error(err.message);
         reject(err);
       } else {
-        console.log(`Updated BOOK_INFO_OBJ table.`);
+        console.log(`Updated book id: ${bookId} in BOOK_INFO_OBJ table.`);
         resolve();
       }
     });
@@ -340,16 +348,32 @@ let updateBookInfoObjDownloadedByBookId = async(bookId) => {
 }
 
 
-// get the number of rows in the BOOK_INFO_OBJ table
-let getBookInfoObjCount = async() => {
+// get the number of rows in the BOOK_INFO_OBJ table where bookListID = bookListID
+let countBookInfoObjByBookListId = async(bookListID) => {
   return new Promise((resolve, reject) => {
-    db.get(`SELECT COUNT(*) FROM BOOK_INFO_OBJ`, (err, row) => {
+    db.get(`SELECT COUNT(*) FROM BOOK_INFO_OBJ WHERE bookListID = ${bookListID}`, (err, row) => {
       if (err) {
         console.error(err.message);
         reject(err);
       } else {
         console.log(`Found ${row['COUNT(*)']} in BOOK_INFO_OBJ table.`);
         resolve(row['COUNT(*)']);
+      }
+    });
+  })
+}
+
+
+// remove all row where bookListID = bookListID
+let removeBookInfoObjByBookListId = async(bookListID) => {
+  return new Promise((resolve, reject) => {
+    db.run(`DELETE FROM BOOK_INFO_OBJ WHERE bookListID = ${bookListID}`, (err) => {
+      if (err) {
+        console.error(err.message);
+        reject(err);
+      } else {
+        console.log(`Removed all in BOOK_INFO_OBJ table.`);
+        resolve();
       }
     });
   })
@@ -364,7 +388,11 @@ let findBookInfoObjNotDownloaded = async() => {
         console.error(err.message);
         reject(err);
       } else {
-        console.log(`Found ${row.title} in BOOK_INFO_OBJ table.`);
+        if (row) {
+          console.log(`Found ${row.title} in BOOK_INFO_OBJ table.`);
+        } else {
+          console.log(`Found no book in BOOK_INFO_OBJ table.`);
+        }
         resolve(row);
       }
     });
@@ -378,13 +406,14 @@ let findBookInfoObjNotDownloaded = async() => {
 module.exports = {
   connectDB,
   closeDB,
-  createTable,
+  createBookInfoTable,
   getDB,
   insertBookInfoObj,
   insertBookInfoObjs,
   findBookInfoObjByBookId,
   findAllBookInfoObj,
   updateBookInfoObjDownloadedByBookId,
-  getBookInfoObjCount,
+  countBookInfoObjByBookListId,
   findBookInfoObjNotDownloaded,
+  removeBookInfoObjByBookListId,
 }

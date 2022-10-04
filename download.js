@@ -48,9 +48,10 @@ let getMirrorLoginInfo = async function (browser) {
     let content = document.getElementsByClassName("lead mb-4")[0].textContent;
     console.log(`content: ${content}`);
     // get the content by regular expression math "0/10" in content
-    let usage = content.match(/0\/10/)?.[0];
+    let usage = content.match(/(\d)\/10/)?.[0];
     console.log(`usage: ${usage}`);
-    if (usage) {
+
+    if (Number(usage?.[0]) < 5) {
       // get href from a outside the div class "btn btn-primary btn-lg"
       let href = document
         .getElementsByClassName("btn btn-primary btn-lg")[0]
@@ -71,9 +72,10 @@ let getMirrorLoginInfo = async function (browser) {
       let content = document.getElementsByClassName("lead mb-4")[0].textContent;
       console.log(`content: ${content}`);
       // match "one number slash 10" like in content
-      let usage = content.match(/\d\/10/)?.[0];
+      let usage = content.match(/(\d)\/10/)?.[0];
       console.log(`usage: ${usage}`);
-      if (usage) {
+
+      if (Number(usage?.[0]) < 5) {
         let href = document
           .getElementsByClassName("btn btn-primary btn-lg")[0]
           .parentElement.getAttribute("href");
@@ -213,7 +215,7 @@ let downloadBooks = async (browser, targetDomain, bookInfoObj) => {
   if (noChance) {
     await page.screenshot({ path: "afterBookDownload.png" });
     await page.close();
-    console.log("剩余次数用完了  ...");
+    console.log("剩余次数用完了, 换个账号继续搞  ... \r\n");
     return false;
   }
 
@@ -225,7 +227,6 @@ let downloadBooks = async (browser, targetDomain, bookInfoObj) => {
   await page.screenshot({ path: "afterBookDownload.png" });
   await new Promise(r => setTimeout(r, 500));
   console.log(`download ${bookInfoObj.title}.${bookInfoObj.extension} completed`);
-  console.log(`---------------------------------------------------------------------\r\n`);
 
   // if span with class "mark" and content is "已下载" find return true
   let isDownloaded = await page.evaluate(async () => {

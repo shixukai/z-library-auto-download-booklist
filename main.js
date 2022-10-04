@@ -21,18 +21,45 @@ let localDB = require("./localDB.js");
 
   await localDB.connectDB('books.db');
   let db = localDB.getDB();
-  await localDB.createTable(db);
+  await localDB.createBookInfoTable(db);
 
   // 把临时数(session localStorage等等)据都存放在/tmp/myChromeSession目录下
   const browser = await puppeteer.launch({ userDataDir: '/tmp/myChromeSession' });
 
   // get getBookInfoObjCount from localDB
-  let getBookInfoObjCount = await localDB.getBookInfoObjCount(db);
+  let getBookInfoObjCount = await localDB.countBookInfoObjByBookListId(bookListID);
   if (getBookInfoObjCount == 0) {
     let {domain} = await getMirrorLoginInfos(browser);
     let {allBooks} = await getAllBooks(bookListID, domain);
     // use insertBookInfoObjs
-    await localDB.insertBookInfoObjs(allBooks.map((book) =>  book.book));
+    await localDB.insertBookInfoObjs(allBooks.map((book) =>  book.book), bookListID);
+  } else {
+    // interactive with user
+    // the answer must be yes or no
+    // ask user if removeBookInfoObjByBookListId
+    let answer = null;
+    while (answer !== "yes" && answer !== "no") {
+      answer = await new Promise((resolve) => {
+        const readline = require('readline').createInterface({
+          input: process.stdin,
+          output: process.stdout
+        });
+        readline.question(`There are ${getBookInfoObjCount} books in the database, do you want to remove them and download the latest books? (yes/no): `, (answer) => {
+          readline.close();
+          resolve(answer);
+        });
+      });
+    }
+
+    if (answer == 'yes') {
+      await localDB.removeBookInfoObjByBookListId(bookListID);
+      let {domain} = await getMirrorLoginInfos(browser);
+      let {allBooks} = await getAllBooks(bookListID, domain);
+      // use insertBookInfoObjs
+      await localDB.insertBookInfoObjs(allBooks.map((book) =>  book.book), bookListID);
+    } else {
+      console.log("continue unfinished download");
+    }
   }
 
   let nextBookToDownload = await localDB.findBookInfoObjNotDownloaded();
@@ -46,6 +73,9 @@ let localDB = require("./localDB.js");
 
   await browser.close();
 })();
+
+
+// Abstract process function
 
 let getAllBooks = async (bookListID, domain) => {
   let allBooks = [];
@@ -105,28 +135,40 @@ let handleDownload = async (browser, domain, mirrorLoginUrl) => {
     let retryCount = 0;
     while (!downloadRes) {
       try {
+        if (nextBookToDownload.filesize > 31457280 && nextBookToDownload.extension == "pdf") {
+          // 3 means overlarge
+          await localDB.updateBookInfoObjDownloadedByBookId(nextBookToDownload.book_id, 3);
+          console.log(`book_id: ${nextBookToDownload.book_id} is pdf and overlarge, file size : ${nextBookToDownload.filesizeString}, skip it`);
+          break;
+        }
+
         downloadRes = await downloadBooks(browser, domain, nextBookToDownload);
 
         if (!downloadRes) {
           throw new Error("download failed");
         }
-      } catch (e) {
+
+        await localDB.updateBookInfoObjDownloadedByBookId(nextBookToDownload.book_id);
+      } catch (e1) {
         try {
           mirrorLoginUrl = await getMirrorLoginInfo(browser);
           domain = mirrorLoginUrl.match(/https?:\/\/[^/]+/)?.[0];
           console.log(`catch error, change domain: ${domain}`);
-        } catch (e) {
-          console.log(e);
+        } catch (e2) {
+          console.log("catch 1: ", e2);
         }
-        console.log(e);
-        if (retryCount > 5) {
-          console.log(`retryCount > 3, skip this book: ${nextBookToDownload.title}`);
+        console.log("catch 2: ", e1);
+        if (retryCount > 2) {
+          console.log(`retryCount 3 times but not download success, skip this book: ${nextBookToDownload.title}`);
+          // 2 means download failed
+          await localDB.updateBookInfoObjDownloadedByBookId(nextBookToDownload.book_id, 2);
           break;
         }
         retryCount++;
       }
     }
-    await localDB.updateBookInfoObjDownloadedByBookId(nextBookToDownload.book_id);
+    console.log(`---------------------------------------------------------------------\r\n`);
+
     nextBookToDownload = await localDB.findBookInfoObjNotDownloaded();
   }
 }
