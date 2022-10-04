@@ -96,7 +96,7 @@ let createTable = async() => {
       dl TEXT,
       preview TEXT,
       _isUserSavedBook INTEGER,
-      downloaded INTEGER
+      downloaded INTEGER DEFAULT 0
       )`, (err) => {
       if (err) {
         console.error(err.message);
@@ -187,6 +187,113 @@ let insertBookInfoObj = async(bookInfoObj) => {
   })
 }
 
+// async function insert batch bookInfoObjs to BOOK_INFO_OBJ
+let insertBookInfoObjs = async(bookInfoObjs) => {
+  return new Promise((resolve, reject) => {
+    let stmt = db.prepare(`INSERT INTO BOOK_INFO_OBJ (
+      book_id,
+      title,
+      author,
+      volume,
+      year,
+      edition,
+      publisher,
+      identifier,
+      language,
+      extension,
+      pages,
+      filesize,
+      series,
+      cover,
+      terms_hash,
+      active,
+      filesizeString,
+      href,
+      hash,
+      description,
+      kindleAvailable,
+      sendToEmailAvailable,
+      interestScore,
+      qualityScore,
+      dl,
+      preview,
+      _isUserSavedBook,
+      downloaded
+      ) VALUES (
+        ?,
+        ?,
+        ?,
+        ?,
+        ?,
+        ?,
+        ?,
+        ?,
+        ?,
+        ?,
+        ?,
+        ?,
+        ?,
+        ?,
+        ?,
+        ?,
+        ?,
+        ?,
+        ?,
+        ?,
+        ?,
+        ?,
+        ?,
+        ?,
+        ?,
+        ?,
+        ?,
+        ?
+        )`);
+    for (let bookInfoObj of bookInfoObjs) {
+      stmt.run(
+        bookInfoObj.id,
+        bookInfoObj.title,
+        bookInfoObj.author,
+        bookInfoObj.volume,
+        bookInfoObj.year,
+        bookInfoObj.edition,
+        bookInfoObj.publisher,
+        bookInfoObj.identifier,
+        bookInfoObj.language,
+        bookInfoObj.extension,
+        bookInfoObj.pages,
+        bookInfoObj.filesize,
+        bookInfoObj.series,
+        bookInfoObj.cover,
+        bookInfoObj.terms_hash,
+        bookInfoObj.active,
+        bookInfoObj.filesizeString,
+        bookInfoObj.href,
+        bookInfoObj.hash,
+        bookInfoObj.description,
+        bookInfoObj.kindleAvailable,
+        bookInfoObj.sendToEmailAvailable,
+        bookInfoObj.interestScore,
+        bookInfoObj.qualityScore,
+        bookInfoObj.dl,
+        bookInfoObj.preview,
+        bookInfoObj._isUserSavedBook,
+        bookInfoObj.downloaded,
+      );
+    }
+    stmt.finalize((err) => {
+      if (err) {
+        console.error(err.message);
+        reject(err);
+      } else {
+        console.log(`Inserted ${bookInfoObjs.length} into BOOK_INFO_OBJ table.`);
+        resolve();
+      }
+    });
+  })
+}
+
+
 // find bookInfoObj by book_id async function
 let findBookInfoObjByBookId = async(bookId) => {
   return new Promise((resolve, reject) => {
@@ -233,10 +340,36 @@ let updateBookInfoObjDownloadedByBookId = async(bookId) => {
 }
 
 
+// get the number of rows in the BOOK_INFO_OBJ table
+let getBookInfoObjCount = async() => {
+  return new Promise((resolve, reject) => {
+    db.get(`SELECT COUNT(*) FROM BOOK_INFO_OBJ`, (err, row) => {
+      if (err) {
+        console.error(err.message);
+        reject(err);
+      } else {
+        console.log(`Found ${row['COUNT(*)']} in BOOK_INFO_OBJ table.`);
+        resolve(row['COUNT(*)']);
+      }
+    });
+  })
+}
 
 
-
-
+// find a row in the BOOK_INFO_OBJ which downloaded is 0 or Null
+let findBookInfoObjNotDownloaded = async() => {
+  return new Promise((resolve, reject) => {
+    db.get(`SELECT * FROM BOOK_INFO_OBJ WHERE downloaded = 0 OR downloaded IS NULL`, (err, row) => {
+      if (err) {
+        console.error(err.message);
+        reject(err);
+      } else {
+        console.log(`Found ${row.title} in BOOK_INFO_OBJ table.`);
+        resolve(row);
+      }
+    });
+  })
+}
 
 
 
@@ -248,7 +381,10 @@ module.exports = {
   createTable,
   getDB,
   insertBookInfoObj,
+  insertBookInfoObjs,
   findBookInfoObjByBookId,
   findAllBookInfoObj,
-  updateBookInfoObjDownloadedByBookId
+  updateBookInfoObjDownloadedByBookId,
+  getBookInfoObjCount,
+  findBookInfoObjNotDownloaded,
 }
