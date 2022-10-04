@@ -59,7 +59,7 @@ let getMirrorLoginInfo = async function (browser) {
       console.log(`href: ${href}`);
       return href
     } else {
-      console.log(`usage is not 0/10`);
+      console.log(`usage > 5, find another mirror`);
       return null;
     }
   });

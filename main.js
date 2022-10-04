@@ -20,8 +20,8 @@ let localDB = require("./localDB.js");
   let bookListID = process.argv[2];
 
   await localDB.connectDB('books.db');
-  let db = localDB.getDB();
-  await localDB.createBookInfoTable(db);
+  await localDB.createBookInfoTable();
+  await localDB.addIndexForBookId();
 
   // 把临时数(session localStorage等等)据都存放在/tmp/myChromeSession目录下
   const browser = await puppeteer.launch({ userDataDir: '/tmp/myChromeSession' });

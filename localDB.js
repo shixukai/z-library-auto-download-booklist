@@ -64,6 +64,22 @@ let closeDB = async() => {
   })
 }
 
+// if index of book_id not exist, add index for table BOOK_INFO_OBJ of book_id
+let addIndexForBookId = async() => {
+  return new Promise((resolve, reject) => {
+    db.run(`CREATE INDEX IF NOT EXISTS book_id_index ON BOOK_INFO_OBJ (book_id)`, (err) => {
+      if (err) {
+        console.error(err.message);
+        reject(err);
+      } else {
+        console.log(`Added index for table BOOK_INFO_OBJ of book_id.`);
+        resolve();
+      }
+    });
+  })
+}
+
+
 // create bookDetails table if not exist async function
 let createBookInfoTable = async() => {
   return new Promise((resolve, reject) => {
@@ -416,4 +432,5 @@ module.exports = {
   countBookInfoObjByBookListId,
   findBookInfoObjNotDownloaded,
   removeBookInfoObjByBookListId,
+  addIndexForBookId,
 }
