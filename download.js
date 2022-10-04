@@ -103,7 +103,7 @@ let getMirrorLoginInfo = async function (browser) {
     i++;
 
     if (i >= 5) {
-      if (reloadCount > 1) {
+      if (reloadCount > 0) {
         //raise error
         throw new Error('reload too many times');
       }

@@ -66,7 +66,8 @@ let getDoc = async (browser, targetDomain) => {
     return bookInfoObjs;
   }, targetDomain);
 
-  // close browser
+  // close page
+  await page.close();
   return bookInfoObjsRes;
 }
 

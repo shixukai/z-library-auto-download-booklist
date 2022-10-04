@@ -5,6 +5,17 @@ let getBookListDetails = require("./fetchBookInfos.js").getBookListDetails;
 let downloadBooks = require("./download.js").downloadBooks;
 
 (async () => {
+  // get bookListID from command line
+  // if bookListID is not provided, exit and print usage example
+
+  if (process.argv.length < 3) {
+    console.log("Usage: node main.js bookListID");
+    console.log("Example: node main.js 140144");
+    process.exit(1);
+  }
+
+  let bookListID = process.argv[2];
+
   // 把临时数(session localStorage等等)据都存放在/tmp/myChromeSession目录下
   const browser = await puppeteer.launch({ userDataDir: '/tmp/myChromeSession' });
 
@@ -26,7 +37,6 @@ let downloadBooks = require("./download.js").downloadBooks;
 
   // ------------------get book infos------------------
   // let downloadObjs = await getDoc(browser, domain);
-  let bookListID = "140144"
   let allBooks = [];
 
   let bookDetails = await getBookListDetails(bookListID, 1, domain);
