@@ -81,8 +81,50 @@ let getBookListDetails = async(listID, page, targetDomain) => {
 }
 
 
+
+let getBookListBySearchUrl = async (browser, searchUrl) => {
+  const page = await browser.newPage();
+  await page.goto(searchUrl);
+  await page.waitForNetworkIdle({idleTime: 500});
+
+  // get all a inside h3 with property itemprop="name" in div with id "searchResultBox"
+  // get the href attribute of a and the content of a
+  let bookListObjs = await page.evaluate(() => {
+    let bookList = Array.from(document
+      .getElementById("searchResultBox")
+      .getElementsByTagName("h3"))
+      .filter(h3 => h3.getAttribute("itemprop") === "name")
+      .map(h3 => h3.getElementsByTagName("a")[0])
+      .map(a => {
+        return {
+          "href": a.getAttribute("href"),
+          "title": a.textContent
+        }
+      });
+    return bookList;
+  });
+
+  // book_id is the middle part of the href
+  // bookListObjs.book_id = bookListObjs.href.split("/")[2];
+  let bookListObjsWithId = bookListObjs.map(bookListObj => {
+    bookListObj["id"] = bookListObj.href.split("/")[2];
+    return bookListObj;
+  });
+
+  console.log(`bookListObjs: ${JSON.stringify(bookListObjsWithId, null, 2)}`);
+
+  // take a screenshot of the page
+  await page.screenshot({ path: "searchResult.png" });
+
+  await page.close()
+
+  return bookListObjsWithId;
+}
+
+
 // export { getDoc, parserDoc }
 module.exports = {
   getDoc,
-  getBookListDetails
+  getBookListDetails,
+  getBookListBySearchUrl
 };

@@ -1,8 +1,7 @@
 let puppeteer = require("puppeteer");
 let getMirrorLoginInfo = require("./download.js").getMirrorLoginInfo;
-let getDoc = require("./fetchBookInfos.js").getDoc;
 let getBookListDetails = require("./fetchBookInfos.js").getBookListDetails;
-let downloadBooks = require("./download.js").downloadBooks;
+let handleDownload = require("./download.js").handleDownload;
 let localDB = require("./localDB.js");
 
 // main function
@@ -31,6 +30,7 @@ let localDB = require("./localDB.js");
   if (getBookInfoObjCount == 0) {
     let {domain} = await getMirrorLoginInfos(browser);
     let {allBooks} = await getAllBooks(bookListID, domain);
+    // console.log(`allBooks: ${JSON.stringify(allBooks, null, 2)}`);
     // use insertBookInfoObjs
     await localDB.insertBookInfoObjs(allBooks.map((book) =>  book.book), bookListID);
   } else {
@@ -117,58 +117,4 @@ let getMirrorLoginInfos = async (browser) => {
   console.log(`domain: ${domain}`);
 
   return {mirrorLoginUrl, domain}
-}
-
-
-
-let handleDownload = async (browser, domain, mirrorLoginUrl) => {
-
-  // recursive use downloadBooks in try  TimeoutError
-  // if TimeoutError, reload the page and try again
-  // infinite loop until download completed
-  let nextBookToDownload = await localDB.findBookInfoObjNotDownloaded();
-  console.log(`nextBookToDownload: ${JSON.stringify(nextBookToDownload, null, 2)}`);
-
-  while(nextBookToDownload) {
-    let downloadRes = null;
-    // if retry more than 3 times, skip this book
-    let retryCount = 0;
-    while (!downloadRes) {
-      try {
-        if (nextBookToDownload.filesize > 31457280 && nextBookToDownload.extension == "pdf") {
-          // 3 means overlarge
-          await localDB.updateBookInfoObjDownloadedByBookId(nextBookToDownload.book_id, 3);
-          console.log(`book_id: ${nextBookToDownload.book_id} is pdf and overlarge, file size : ${nextBookToDownload.filesizeString}, skip it`);
-          break;
-        }
-
-        downloadRes = await downloadBooks(browser, domain, nextBookToDownload);
-
-        if (!downloadRes) {
-          throw new Error("download failed");
-        }
-
-        await localDB.updateBookInfoObjDownloadedByBookId(nextBookToDownload.book_id);
-      } catch (e1) {
-        try {
-          mirrorLoginUrl = await getMirrorLoginInfo(browser);
-          domain = mirrorLoginUrl.match(/https?:\/\/[^/]+/)?.[0];
-          console.log(`catch error, change domain: ${domain}`);
-        } catch (e2) {
-          console.log("catch 1: ", e2);
-        }
-        console.log("catch 2: ", e1);
-        if (retryCount > 2) {
-          console.log(`retryCount 3 times but not download success, skip this book: ${nextBookToDownload.title}`);
-          // 2 means download failed
-          await localDB.updateBookInfoObjDownloadedByBookId(nextBookToDownload.book_id, 2);
-          break;
-        }
-        retryCount++;
-      }
-    }
-    console.log(`---------------------------------------------------------------------\r\n`);
-
-    nextBookToDownload = await localDB.findBookInfoObjNotDownloaded();
-  }
 }

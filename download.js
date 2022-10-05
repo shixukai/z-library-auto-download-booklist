@@ -1,5 +1,5 @@
 // request and get html doc from https://v3.zhelper.net/ by puppeteer
-const puppeteer = require("puppeteer");
+let localDB = require("./localDB.js");
 
 let getMirrorLoginInfo = async function (browser) {
   const page = await browser.newPage();
@@ -25,6 +25,7 @@ let getMirrorLoginInfo = async function (browser) {
     return siteObjs;
   });
   // console.log(`siteObjs: ${JSON.stringify(siteObjs)}`);
+  await page.close();
 
   // select radom element in siteObjs
   // let targetSiteObj = siteObjs.reduce((a, b) => (a.number > b.number ? a : b));
@@ -35,7 +36,7 @@ let getMirrorLoginInfo = async function (browser) {
   // get the content of p with class "lead mb-4"
   // close browser
   const page2 = await browser.newPage();
-  await page.setDefaultNavigationTimeout(10000);
+  await page2.setDefaultNavigationTimeout(10000);
 
   await page2.goto(targetSiteObj.href);
   page2.on('console', msg => {
@@ -119,13 +120,10 @@ let getMirrorLoginInfo = async function (browser) {
     }
   }
 
-
-
   console.log(`page2.url(): ${page2.url()}`);
   await page2.screenshot({ path: "mirror.png" });
 
   //close all pages
-  await page.close();
   await page2.close();
 
   return mirrorUrl;
@@ -154,7 +152,7 @@ let downloadBooks = async (browser, targetDomain, bookInfoObj) => {
   const client = await page.target().createCDPSession();
   await client.send("Page.setDownloadBehavior", {
     behavior: "allow",
-    downloadPath: `./tmp`,
+    downloadPath: `/Volumes/books/book_store/z-lib`,
   });
 
 
@@ -194,7 +192,28 @@ let downloadBooks = async (browser, targetDomain, bookInfoObj) => {
       await epubLink.click();
       console.log(`find epub version, download it...`);
     } else {
-      console.log(`not find epub version, download default version...`);
+      console.log(`not find epub version, try download default version...`);
+      // find div inside the div with class "bookProperty property__file"
+      // div class is "property_value", get the content
+      let extensionAndSize = await page.evaluate(async () => {
+        let divs = document.querySelectorAll("div.bookProperty.property__file div.property_value");
+        console.log(`divs.length: ${divs.length}`);
+        return divs[0]?.textContent;
+      });
+
+
+      // extensionAndSize：PDF, 90.19 MB
+      // match "PDF" or "EPUB" in extensionAndSize
+      let extension = extensionAndSize.match(/(PDF|EPUB)/)?.[0];
+      // match "number dot number" in extensionAndSize
+      let size = Number(extensionAndSize.match(/(\d+\.\d+)/)?.[0]);
+
+      if (extension === "PDF" && size > 30) {
+        console.log(`${bookInfoObj.title} default pdf is ${size} MB, too big, skip it`);
+        await page.close();
+        return true;
+      }
+
       await page.click(".btn.btn-primary.dlButton.addDownloadedBook");
     }
   }
@@ -239,7 +258,6 @@ let downloadBooks = async (browser, targetDomain, bookInfoObj) => {
     return false;
   });
 
-
   await page.close();
 
   if (isDownloaded) {
@@ -249,9 +267,62 @@ let downloadBooks = async (browser, targetDomain, bookInfoObj) => {
   }
 }
 
+let handleDownload = async (browser, domain, mirrorLoginUrl) => {
+
+  // recursive use downloadBooks in try  TimeoutError
+  // if TimeoutError, reload the page and try again
+  // infinite loop until download completed
+  let nextBookToDownload = await localDB.findBookInfoObjNotDownloaded();
+  console.log(`nextBookToDownload: ${JSON.stringify(nextBookToDownload, null, 2)}`);
+
+  while(nextBookToDownload) {
+    let downloadRes = null;
+    // if retry more than 3 times, skip this book
+    let retryCount = 0;
+    while (!downloadRes) {
+      try {
+        if (nextBookToDownload.filesize > 31457280 && nextBookToDownload.extension == "pdf") {
+          // 3 means overlarge
+          await localDB.updateBookInfoObjDownloadedByBookId(nextBookToDownload.book_id, 3);
+          console.log(`book_id: ${nextBookToDownload.book_id} is pdf and overlarge, file size : ${nextBookToDownload.filesizeString}, skip it`);
+          break;
+        }
+
+        downloadRes = await downloadBooks(browser, domain, nextBookToDownload);
+
+        if (!downloadRes) {
+          throw new Error("download failed");
+        }
+
+        await localDB.updateBookInfoObjDownloadedByBookId(nextBookToDownload.book_id);
+      } catch (e1) {
+        try {
+          mirrorLoginUrl = await getMirrorLoginInfo(browser);
+          domain = mirrorLoginUrl.match(/https?:\/\/[^/]+/)?.[0];
+          console.log(`catch error, change domain: ${domain}`);
+        } catch (e2) {
+          console.log("catch 1: ", e2);
+        }
+        console.log("catch 2: ", e1);
+        if (retryCount > 2) {
+          console.log(`retryCount 3 times but not download success, skip this book: ${nextBookToDownload.title}`);
+          // 2 means download failed
+          await localDB.updateBookInfoObjDownloadedByBookId(nextBookToDownload.book_id, 2);
+          break;
+        }
+        retryCount++;
+      }
+    }
+    console.log(`---------------------------------------------------------------------\r\n`);
+
+    nextBookToDownload = await localDB.findBookInfoObjNotDownloaded();
+  }
+}
+
 
 // export getMirrorUrl as a module
 module.exports = {
   getMirrorLoginInfo,
-  downloadBooks
+  downloadBooks,
+  handleDownload
 };
