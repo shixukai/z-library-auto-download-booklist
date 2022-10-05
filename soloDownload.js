@@ -14,8 +14,16 @@ let handleDownload = require("./download.js").handleDownload;
   const browser = await puppeteer.launch({ userDataDir: '/tmp/myChromeSession' });
 
 
-  let {domain, mirrorLoginUrl} = await getMirrorLoginInfos(browser);
-  await handleDownload(browser, domain, mirrorLoginUrl);
+  let mirrorLoginUrl = null;
+  while(!mirrorLoginUrl) {
+    try {
+      mirrorLoginUrl = await getMirrorLoginInfos(browser);
+    } catch {
+      console.log("retrying...");
+    }
+  }
+
+  await handleDownload(browser, mirrorLoginUrl);
 
   await browser.close();
 })();

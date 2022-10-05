@@ -1,5 +1,6 @@
 // request and get html doc from https://v3.zhelper.net/ by puppeteer
 let localDB = require("./localDB.js");
+let puppeteer = require("puppeteer");
 
 let getMirrorLoginInfo = async function (browser) {
   const page = await browser.newPage();
@@ -36,34 +37,40 @@ let getMirrorLoginInfo = async function (browser) {
   // get the content of p with class "lead mb-4"
   // close browser
   const page2 = await browser.newPage();
-  await page2.setDefaultNavigationTimeout(10000);
+  await page2.setDefaultNavigationTimeout(5000);
+  let mirrorUrl = null;
 
-  await page2.goto(targetSiteObj.href);
-  page2.on('console', msg => {
-    for (let i = 0; i < msg.args().length; ++i)
-      console.log(`${i}: ${msg.args()[i]}`);
-  });
-  console.log(`page2.url(): ${page2.url()}`);
+  try {
+    await page2.goto(targetSiteObj.href);
+    page2.on('console', msg => {
+      for (let i = 0; i < msg.args().length; ++i)
+        console.log(`${i}: ${msg.args()[i]}`);
+    });
+    console.log(`page2.url(): ${page2.url()}`);
 
-  let mirrorUrl = await page2.evaluate(async () => {
-    let content = document.getElementsByClassName("lead mb-4")[0].textContent;
-    console.log(`content: ${content}`);
-    // get the content by regular expression math "0/10" in content
-    let usage = content.match(/(\d)\/10/)?.[0];
-    console.log(`usage: ${usage}`);
+    mirrorUrl = await page2.evaluate(async () => {
+      let content = document.getElementsByClassName("lead mb-4")[0].textContent;
+      console.log(`content: ${content}`);
+      // get the content by regular expression math "0/10" in content
+      let usage = content.match(/(\d)\/10/)?.[0];
+      console.log(`usage: ${usage}`);
 
-    if (Number(usage?.[0]) < 5) {
-      // get href from a outside the div class "btn btn-primary btn-lg"
-      let href = document
-        .getElementsByClassName("btn btn-primary btn-lg")[0]
-        .parentElement.getAttribute("href");
-      console.log(`href: ${href}`);
-      return href
-    } else {
-      console.log(`usage > 5, find another mirror`);
-      return null;
-    }
-  });
+      if (Number(usage?.[0]) < 5) {
+        // get href from a outside the div class "btn btn-primary btn-lg"
+        let href = document
+          .getElementsByClassName("btn btn-primary btn-lg")[0]
+          .parentElement.getAttribute("href");
+        console.log(`href: ${href}`);
+        return href
+      } else {
+        console.log(`usage > 5, find another mirror`);
+        return null;
+      }
+    });
+  } catch (error) {
+    console.log(`first try error: ${error}`);
+  }
+
 
   // if mirrorUrl is not null, show the mirrorUrl
   // else try to get mirrorUrl again
@@ -88,10 +95,14 @@ let getMirrorLoginInfo = async function (browser) {
     });
   }
 
-  // goto mirrorUrl on page2
-  await page2.goto(mirrorUrl, {
-    waitUntil: "networkidle2"
-  });
+  try {
+    // goto mirrorUrl on page2
+    await page2.goto(mirrorUrl, {
+      waitUntil: "networkidle2"
+    });
+  } catch (error) {
+    return null;
+  }
 
   // get the cookies from page2
   let cookies = await page2.cookies();
@@ -106,7 +117,7 @@ let getMirrorLoginInfo = async function (browser) {
     i++;
 
     if (i >= 5) {
-      if (reloadCount > 0) {
+      if (reloadCount != 0) {
         //raise error
         throw new Error('reload too many times');
       }
@@ -152,7 +163,7 @@ let downloadBooks = async (browser, targetDomain, bookInfoObj) => {
   const client = await page.target().createCDPSession();
   await client.send("Page.setDownloadBehavior", {
     behavior: "allow",
-    downloadPath: `/Volumes/books/book_store/z-lib`,
+    downloadPath: `/Volumes/books/book_store/z-lib2`,
   });
 
 
@@ -267,13 +278,16 @@ let downloadBooks = async (browser, targetDomain, bookInfoObj) => {
   }
 }
 
-let handleDownload = async (browser, domain, mirrorLoginUrl) => {
+let handleDownload = async (browser, mirrorLoginUrl) => {
+  let domain = mirrorLoginUrl.match(/https?:\/\/[^/]+/)?.[0];
 
   // recursive use downloadBooks in try  TimeoutError
   // if TimeoutError, reload the page and try again
   // infinite loop until download completed
   let nextBookToDownload = await localDB.findBookInfoObjNotDownloaded();
   console.log(`nextBookToDownload: ${JSON.stringify(nextBookToDownload, null, 2)}`);
+
+  let downloadCount = 0;
 
   while(nextBookToDownload) {
     let downloadRes = null;
@@ -292,6 +306,10 @@ let handleDownload = async (browser, domain, mirrorLoginUrl) => {
 
         if (!downloadRes) {
           throw new Error("download failed");
+        }
+
+        if (!mirrorLoginUrl) {
+          throw new Error("mirrorLoginUrl not right");
         }
 
         await localDB.updateBookInfoObjDownloadedByBookId(nextBookToDownload.book_id);
@@ -313,7 +331,15 @@ let handleDownload = async (browser, domain, mirrorLoginUrl) => {
         retryCount++;
       }
     }
-    console.log(`---------------------------------------------------------------------\r\n`);
+    console.log(`-----------------------------------${downloadCount}----------------------------------\r\n`);
+    downloadCount++;
+    // restart browser every 30 downloadCount
+    if (downloadCount % 30 === 0) {
+      await browser.close();
+      browser = await puppeteer.launch({ userDataDir: '/tmp/myChromeSession' });
+
+      await localDB.countBookInfoObjByDownloaded();
+    }
 
     nextBookToDownload = await localDB.findBookInfoObjNotDownloaded();
   }

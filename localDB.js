@@ -296,6 +296,24 @@ let findBookInfoObjNotDownloaded = async() => {
   })
 }
 
+// group and count by downloaded
+let countBookInfoObjByDownloaded = async() => {
+  return new Promise((resolve, reject) => {
+    db.all(`SELECT downloaded, COUNT(*) FROM BOOK_INFO_OBJ GROUP BY downloaded`, (err, rows) => {
+      if (err) {
+        console.error(err.message);
+        reject(err);
+      } else {
+        console.log('**********************************************')
+        console.log(`rows: ${JSON.stringify(rows, null, 2)}`);
+        console.log('**********************************************')
+        resolve(rows);
+      }
+    });
+  })
+}
+
+
 
 
 
@@ -314,4 +332,5 @@ module.exports = {
   findBookInfoObjNotDownloaded,
   removeBookInfoObjByBookListId,
   addIndexForBookId,
+  countBookInfoObjByDownloaded,
 }
