@@ -1,6 +1,7 @@
 // request and get html doc from https://v3.zhelper.net/ by puppeteer
 let localDB = require("./localDB.js");
 let puppeteer = require("puppeteer");
+let fs = require("fs");
 
 let getMirrorLoginInfo = async function (browser) {
   const page = await browser.newPage();
@@ -140,7 +141,7 @@ let getMirrorLoginInfo = async function (browser) {
   return mirrorUrl;
 }
 
-let downloadBooks = async (browser, targetDomain, bookInfoObj) => {
+let downloadBooks = async (browser, targetDomain, bookInfoObj, downloadPath, downloadSuffix) => {
   // bookDetailUrl is concat by targetDomain and bookInfoObj.href
   let bookDetailUrl = new URL(bookInfoObj.href, targetDomain).href;
   const page = await browser.newPage();
@@ -163,7 +164,7 @@ let downloadBooks = async (browser, targetDomain, bookInfoObj) => {
   const client = await page.target().createCDPSession();
   await client.send("Page.setDownloadBehavior", {
     behavior: "allow",
-    downloadPath: `/Volumes/books/book_store/z-lib2`,
+    downloadPath: `${downloadPath}${downloadSuffix}`,
   });
 
 
@@ -287,6 +288,13 @@ let handleDownload = async (browser, mirrorLoginUrl) => {
   let nextBookToDownload = await localDB.findBookInfoObjNotDownloaded();
   console.log(`nextBookToDownload: ${JSON.stringify(nextBookToDownload, null, 2)}`);
 
+  // read downloadSuffix and downloadPath in file ./downloadPathInfo.json async
+
+  let downloadPathInfo = JSON.parse(fs.readFileSync("./downloadPathInfo.json", "utf-8"));
+  let downloadSuffix = downloadPathInfo.downloadSuffix;
+  let downloadPath = downloadPathInfo.downloadPath;
+
+
   let downloadCount = 0;
 
   while(nextBookToDownload) {
@@ -302,7 +310,7 @@ let handleDownload = async (browser, mirrorLoginUrl) => {
           break;
         }
 
-        downloadRes = await downloadBooks(browser, domain, nextBookToDownload);
+        downloadRes = await downloadBooks(browser, domain, nextBookToDownload, downloadPath, downloadSuffix);
 
         if (!downloadRes) {
           throw new Error("download failed");
@@ -337,8 +345,17 @@ let handleDownload = async (browser, mirrorLoginUrl) => {
     if (downloadCount % 30 === 0) {
       await browser.close();
       browser = await puppeteer.launch({ userDataDir: '/tmp/myChromeSession' });
+    }
 
-      await localDB.countBookInfoObjByDownloaded();
+    let downloadStatic = await localDB.countBookInfoObjByDownloaded();
+    // find downloaded == 1 in downloadStatic
+    let downloaded = downloadStatic.find(item => item.downloaded === 1);
+    console.log(`downloaded['COUNT(*)']: ${downloaded['COUNT(*)']}`);
+    if (downloaded['COUNT(*)'] % 200 === 0) {
+      downloadSuffix++;
+      // write downloadSuffix and downloadPath to file ./downloadPathInfo.json async
+      downloadPathInfo.downloadSuffix = downloadSuffix;
+      fs.writeFileSync("./downloadPathInfo.json", JSON.stringify(downloadPathInfo, null, 2));
     }
 
     nextBookToDownload = await localDB.findBookInfoObjNotDownloaded();
