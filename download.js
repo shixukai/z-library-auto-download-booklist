@@ -31,7 +31,7 @@ let getMirrorLoginInfo = async function (browser) {
 
   // select radom element in siteObjs
   // let targetSiteObj = siteObjs.reduce((a, b) => (a.number > b.number ? a : b));
-  const targetSiteObj = siteObjs[Math.floor(Math.random() * siteObjs.length)]
+  let targetSiteObj = siteObjs[Math.floor(Math.random() * siteObjs.length)]
   console.log(`targetSiteObj: ${JSON.stringify(targetSiteObj)}`);
 
   // goto the target site of targetSiteObj href
@@ -76,7 +76,9 @@ let getMirrorLoginInfo = async function (browser) {
   // if mirrorUrl is not null, show the mirrorUrl
   // else try to get mirrorUrl again
   while (mirrorUrl === null) {
-    await page2.reload();
+    targetSiteObj = siteObjs[Math.floor(Math.random() * siteObjs.length)]
+    await page2.goto(targetSiteObj.href);
+
     mirrorUrl = await page2.evaluate(async () => {
       let content = document.getElementsByClassName("lead mb-4")[0].textContent;
       console.log(`content: ${content}`);
@@ -351,7 +353,7 @@ let handleDownload = async (browser, mirrorLoginUrl) => {
     // find downloaded == 1 in downloadStatic
     let downloaded = downloadStatic.find(item => item.downloaded === 1);
     console.log(`downloaded['COUNT(*)']: ${downloaded['COUNT(*)']}`);
-    if (downloaded['COUNT(*)'] % 200 === 0) {
+    if (downloaded['COUNT(*)'] % 500 === 0) {
       downloadSuffix++;
       // write downloadSuffix and downloadPath to file ./downloadPathInfo.json async
       downloadPathInfo.downloadSuffix = downloadSuffix;
